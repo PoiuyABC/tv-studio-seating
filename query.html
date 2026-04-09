@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电视台演播大厅座次查询</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',Arial,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);min-height:100vh;color:#fff}
+.container{max-width:100%;padding:10px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;background:rgba(255,255,255,0.1);border-radius:10px;margin-bottom:10px;flex-wrap:wrap;gap:10px}
+.header h1{font-size:clamp(16px,2.5vw,22px);color:#ffd700;text-shadow:2px 2px 4px rgba(0,0,0,0.5)}
+.search-box{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search-box input{padding:8px 15px;border:1px solid #333;border-radius:5px;background:#0f0f1a;color:#fff;font-size:14px;width:200px}
+.search-box input:focus{outline:none;border-color:#ffd700}
+.search-box button{padding:8px 20px;border:none;border-radius:5px;cursor:pointer;font-size:14px;font-weight:bold;transition:all 0.3s}
+.btn-search{background:linear-gradient(45deg,#00b4db,#0083b0);color:#fff}
+.btn-clear{background:linear-gradient(45deg,#f093fb,#f5576c);color:#fff}
+.search-box button:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.3)}
+.seating-area{background:rgba(255,255,255,0.05);border-radius:10px;padding:15px;overflow-x:auto}
+.stage{text-align:center;padding:12px;margin-bottom:12px;background:linear-gradient(90deg,#8B0000,#DC143C,#8B0000);border-radius:10px;font-size:clamp(14px,2vw,20px);font-weight:bold;color:#ffd700;box-shadow:0 5px 20px rgba(139,0,0,0.5)}
+.direction{display:flex;justify-content:space-between;padding:5px 40px;font-size:13px;color:#aaa}
+.seats-grid{display:flex;flex-direction:column;gap:3px;align-items:center}
+.row{display:flex;align-items:center;gap:2px;width:100%;justify-content:center}
+.row-label{width:40px;min-width:40px;text-align:center;font-size:11px;color:#ffd700;font-weight:bold}
+.seat{width:clamp(28px,3.5vw,44px);height:clamp(28px,3.5vw,44px);display:flex;align-items:center;justify-content:center;border-radius:4px;font-size:clamp(9px,1.3vw,12px);border:1px solid rgba(255,255,255,0.1);transition:all 0.3s}
+.seat.aisle{width:30px;min-width:30px;background:rgba(255,255,255,0.05);border:none}
+.seat.available{background:linear-gradient(135deg,#2c3e50,#34495e);color:#95a5a6}
+.seat.occupied{background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;font-weight:bold}
+.seat.highlight{border:3px solid #ffd700;box-shadow:0 0 20px rgba(255,215,0,0.8);transform:scale(1.15);z-index:10}
+.seat:hover:not(.aisle){transform:scale(1.1);box-shadow:0 0 15px rgba(255,215,0,0.4)}
+.tooltip{position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:10px 12px;border-radius:6px;font-size:12px;z-index:1000;pointer-events:none;max-width:260px;box-shadow:0 5px 20px rgba(0,0,0,0.5);border:1px solid #ffd700;display:none;white-space:pre-line}
+.tooltip .name{font-size:14px;font-weight:bold;color:#ffd700;margin-bottom:4px}
+.stats{display:flex;justify-content:center;gap:30px;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;margin-top:10px}
+.stat-item{text-align:center}
+.stat-value{font-size:22px;font-weight:bold;color:#ffd700}
+.stat-label{font-size:11px;color:#aaa}
+.result-info{padding:10px 20px;background:rgba(255,215,0,0.1);border-radius:8px;margin:10px 0;text-align:center;color:#ffd700;font-size:14px}
+@media (max-width:768px){.header{padding:10px}.search-box input{width:150px}.seat{width:24px;height:24px;font-size:8px}.row-label{width:32px;font-size:9px}}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<h1>电视台演播大厅座次查询</h1>
+<div class="search-box">
+<input type="text" id="searchInput" placeholder="输入姓名/单位/职务搜索">
+<button class="btn-search" onclick="searchSeats()">搜索</button>
+<button class="btn-clear" onclick="clearSearch()">清除</button>
+</div>
+</div>
+<div class="result-info" id="resultInfo" style="display:none"></div>
+<div class="seating-area">
+<div class="stage">主席台</div>
+<div class="direction"><span>↑北</span><span>前门→</span></div>
+<div class="seats-grid" id="SeatsGrid"></div>
+</div>
+<div class="stats">
+<div class="stat-item"><div class="stat-value" id="totalSeats">563</div><div class="stat-label">总座位数</div></div>
+<div class="stat-item"><div class="stat-value" id="occupiedSeats">0</div><div class="stat-label">已分配</div></div>
+<div class="stat-item"><div class="stat-value" id="availableSeats">563</div><div class="stat-label">空座位</div></div>
+</div>
+</div>
+<div class="tooltip" id="tooltip"><div class="name"></div><div class="info"></div></div>
+<script>
+var ROWS=15,SEATS_SIDE=9,SEATS_MIDDLE_ODD=20,SEATS_MIDDLE_EVEN=19,seatData={},highlightedSeats=[];
+function getSeatsInRow(row){return row%2===1?SEATS_SIDE*2+SEATS_MIDDLE_ODD:SEATS_SIDE*2+SEATS_MIDDLE_EVEN}
+function getTotalSeats(){var t=0;for(var r=1;r<=ROWS;r++)t+=getSeatsInRow(r);return t}
+function init(){loadFromStorage();renderSeats();updateStats()}
+function renderSeats(){var g=document.getElementById('SeatsGrid');g.innerHTML='';
+for(var row=1;row<=ROWS;row++){var rowDiv=document.createElement('div');rowDiv.className='row';
+var leftLabel=document.createElement('div');leftLabel.className='row-label';leftLabel.textContent=(row<10?'0'+row:row)+'排';rowDiv.appendChild(leftLabel);
+for(var i=0;i<SEATS_SIDE;i++){var seat=37-i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var aisle1=document.createElement('div');aisle1.className='seat aisle';rowDiv.appendChild(aisle1);
+var middleOdds=10,middleEvens=row%2===1?10:9;
+for(var i=0;i<middleOdds;i++){var seat=19-i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+for(var i=0;i<middleEvens;i++){var seat=2+i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var aisle2=document.createElement('div');aisle2.className='seat aisle';rowDiv.appendChild(aisle2);
+var rightStart=row%2===1?22:20;
+for(var i=0;i<SEATS_SIDE;i++){var seat=rightStart+i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var rightLabel=document.createElement('div');rightLabel.className='row-label';rightLabel.textContent=(row<10?'0'+row:row)+'排';rowDiv.appendChild(rightLabel);
+g.appendChild(rowDiv)}}
+function createSeatElement(row,seat){var seatDiv=document.createElement('div');seatDiv.className='seat';
+var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);seatDiv.dataset.seatId=seatId;
+if(seatData[seatId]){seatDiv.classList.add('occupied');seatDiv.textContent=seatData[seatId].name.substring(0,3)}
+else{seatDiv.classList.add('available');seatDiv.textContent=seat}
+seatDiv.addEventListener('mouseenter',function(e){showTooltip(e,seatId)});
+seatDiv.addEventListener('mouseleave',hideTooltip);
+return seatDiv}
+function searchSeats(){var keyword=document.getElementById('searchInput').value.trim().toLowerCase();if(!keyword){clearSearch();return}
+highlightedSeats=[];var results=[];
+for(var seatId in seatData){var d=seatData[seatId];var match=(d.name&&d.name.toLowerCase().indexOf(keyword)!==-1)||(d.unit&&d.unit.toLowerCase().indexOf(keyword)!==-1)||(d.position&&d.position.toLowerCase().indexOf(keyword)!==-1)||(d.phone&&d.phone.indexOf(keyword)!==-1);
+if(match){highlightedSeats.push(seatId);results.push({seatId:seatId,name:d.name,unit:d.unit||'',position:d.position||''})}}
+renderSeats();
+for(var i=0;i<highlightedSeats.length;i++){var el=document.querySelector('[data-seat-id="'+highlightedSeats[i]+'"]');if(el)el.classList.add('highlight')}
+var info=document.getElementById('resultInfo');
+if(results.length>0){info.style.display='block';info.innerHTML='找到 <b>'+results.length+'</b> 个匹配结果';if(results.length<=10){var details=results.map(function(r){return r.seatId.replace('-','排')+'号 '+r.name+(r.unit?' ('+r.unit+')':'')}).join(' | ');info.innerHTML+='<br><span style="font-size:12px;color:#aaa">'+details+'</span>'}}
+else{info.style.display='block';info.innerHTML='未找到匹配结果';info.style.background='rgba(255,100,100,0.1)'}}
+function clearSearch(){document.getElementById('searchInput').value='';document.getElementById('resultInfo').style.display='none';document.getElementById('resultInfo').style.background='rgba(255,215,0,0.1)';highlightedSeats=[];renderSeats()}
+function showTooltip(e,seatId){var t=document.getElementById('tooltip');var d=seatData[seatId];if(!d){t.style.display='none';return}
+t.querySelector('.name').textContent=d.name;var info='座位：'+seatId.replace('-','排-')+'号\n';if(d.unit)info+='单位：'+d.unit+'\n';if(d.position)info+='职务：'+d.position+'\n';if(d.phone)info+='电话：'+d.phone+'\n';if(d.note)info+='备注：'+d.note;
+t.querySelector('.info').textContent=info;t.style.display='block';t.style.left=(e.clientX+15)+'px';t.style.top=(e.clientY+15)+'px'}
+function hideTooltip(){document.getElementById('tooltip').style.display='none'}
+function updateStats(){var o=Object.keys(seatData).length;var t=getTotalSeats();document.getElementById('totalSeats').textContent=t;document.getElementById('occupiedSeats').textContent=o;document.getElementById('availableSeats').textContent=t-o}
+function saveToStorage(){localStorage.setItem('seatingData',JSON.stringify(seatData))}
+function loadFromStorage(){var d=localStorage.getItem('seatingData');if(d)seatData=JSON.parse(d)}
+document.getElementById('searchInput').addEventListener('keypress',function(e){if(e.key==='Enter')searchSeats()});
+init();
+</script>
+</body>
+</html>
