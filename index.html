@@ -27,6 +27,7 @@ body{font-family:'Microsoft YaHei',Arial,sans-serif;background:linear-gradient(1
 .seat.available{background:linear-gradient(135deg,#2c3e50,#34495e);color:#95a5a6}
 .seat.occupied{background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;font-weight:bold}
 .seat:hover:not(.aisle){transform:scale(1.12);box-shadow:0 0 15px rgba(255,215,0,0.4);z-index:10}
+.seat.highlight{border:3px solid #ffd700;box-shadow:0 0 20px rgba(255,215,0,0.8);transform:scale(1.15);z-index:10}
 .seat.dragging{opacity:0.5;transform:scale(1.15)}
 .seat.drag-over{border:2px dashed #ffd700;background:rgba(255,215,0,0.3)}
 .tooltip{position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:10px 12px;border-radius:6px;font-size:12px;z-index:1000;pointer-events:none;max-width:260px;box-shadow:0 5px 20px rgba(0,0,0,0.5);border:1px solid #ffd700;display:none;white-space:pre-line}
@@ -53,11 +54,14 @@ body{font-family:'Microsoft YaHei',Arial,sans-serif;background:linear-gradient(1
 <div class="header">
 <h1>电视台演播大厅座次排序系统</h1>
 <div class="toolbar">
-<button class="btn-success" onclick="exportToExcel()">导出Excel</button>
-<button class="btn-info" onclick="document.getElementById('fileInput').click()">导入Excel</button>
-<button class="btn-warning" onclick="clearAllSeats()">清空座位</button>
+<input type="text" id="searchInput" placeholder="搜索姓名/单位/职务" style="padding:6px 12px;border:1px solid #333;border-radius:5px;background:#0f0f1a;color:#fff;font-size:13px;width:150px">
+<button class="btn-info" onclick="searchSeats()">查询</button>
+<button class="btn-success" onclick="clearHighlight();exportToExcel()">导出</button>
+<button class="btn-info" onclick="clearHighlight();document.getElementById('fileInput').click()">导入</button>
+<button class="btn-warning" onclick="clearAllSeats()">清空</button>
 </div>
 </div>
+<div class="result-info" id="resultInfo" style="display:none;padding:8px 15px;background:rgba(255,215,0,0.1);border-radius:5px;margin-bottom:10px;text-align:center;font-size:13px;color:#ffd700"></div>
 <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="importFromExcel(event)">
 <div class="seating-area">
 <div class="stage">主席台</div>
@@ -91,6 +95,16 @@ body{font-family:'Microsoft YaHei',Arial,sans-serif;background:linear-gradient(1
 var ROWS=15,SEATS_SIDE=9,SEATS_MIDDLE_ODD=20,SEATS_MIDDLE_EVEN=19,seatData={},dragSource=null;
 function getSeatsInRow(row){return row%2===1?SEATS_SIDE*2+SEATS_MIDDLE_ODD:SEATS_SIDE*2+SEATS_MIDDLE_EVEN}
 function getTotalSeats(){var t=0;for(var r=1;r<=ROWS;r++)t+=getSeatsInRow(r);return t}
+
+var highlightedSeats=[];
+
+function searchSeats(){var keyword=document.getElementById('searchInput').value.trim().toLowerCase();if(!keyword){clearHighlight();return}
+highlightedSeats=[];var results=[];for(var seatId in seatData){var d=seatData[seatId];var match=(d.name&&d.name.toLowerCase().indexOf(keyword)!==-1)||(d.unit&&d.unit.toLowerCase().indexOf(keyword)!==-1)||(d.position&&d.position.toLowerCase().indexOf(keyword)!==-1)||(d.phone&&d.phone.indexOf(keyword)!==-1);if(match){highlightedSeats.push(seatId);results.push({seatId:seatId,name:d.name,unit:d.unit||''})}}
+renderSeats();for(var i=0;i<highlightedSeats.length;i++){var el=document.querySelector('[data-seat-id="'+highlightedSeats[i]+'"]');if(el)el.classList.add('highlight')}
+var info=document.getElementById('resultInfo');if(results.length>0){info.style.display='block';info.innerHTML='找到 <b>'+results.length+'</b> 个匹配: '+results.map(function(r){return r.seatId.replace('-','排')+'号'+r.name+(r.unit?'('+r.unit+')':'')}).join(' | ')}else{info.style.display='block';info.innerHTML='未找到匹配';info.style.background='rgba(255,100,100,0.1)'}}
+
+function clearHighlight(){document.getElementById('searchInput').value='';document.getElementById('resultInfo').style.display='none';document.getElementById('resultInfo').style.background='rgba(255,215,0,0.1)';highlightedSeats=[];renderSeats()}
+
 function init(){loadFromStorage();renderSeats();updateStats()}
 function renderSeats(){var g=document.getElementById('SeatsGrid');g.innerHTML='';
 for(var row=1;row<=ROWS;row++){var rowDiv=document.createElement('div');rowDiv.className='row';
@@ -112,7 +126,7 @@ var rightLabel=document.createElement('div');rightLabel.className='row-label';ri
 g.appendChild(rowDiv)}}
 function createSeatElement(row,seat){var seatDiv=document.createElement('div');seatDiv.className='seat';
 var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);seatDiv.dataset.seatId=seatId;seatDiv.dataset.row=row;seatDiv.dataset.seat=seat;
-if(seatData[seatId]){seatDiv.classList.add('occupied');seatDiv.textContent=seatData[seatId].name.substring(0,3)}
+if(seatData[seatId]){seatDiv.classList.add('occupied');seatDiv.textContent=seatData[seatId].name.substring(0,3);if(highlightedSeats.indexOf(seatId)!==-1)seatDiv.classList.add('highlight')}
 else{seatDiv.classList.add('available');seatDiv.textContent=seat}
 seatDiv.addEventListener('click',function(){openAddPersonModal(seatId)});
 seatDiv.addEventListener('mouseenter',function(e){showTooltip(e,seatId)});
@@ -124,7 +138,7 @@ seatDiv.addEventListener('dragleave',function(e){onDragLeave(e)});
 seatDiv.addEventListener('drop',function(e){onDrop(e,seatId)});
 seatDiv.addEventListener('dragend',function(e){onDragEnd(e)});
 return seatDiv}
-function openAddPersonModal(seatId){var m=document.getElementById('addPersonModal');m.classList.add('active');document.getElementById('personName').value='';document.getElementById('personSeat').value=seatId?seatId.replace('-','排-')+'号':'';document.getElementById('personUnit').value='';document.getElementById('personPosition').value='';document.getElementById('personPhone').value='';document.getElementById('personNote').value='';if(seatId&&seatData[seatId]){var d=seatData[seatId];document.getElementById('personName').value=d.name;document.getElementById('personUnit').value=d.unit||'';document.getElementById('personPosition').value=d.position||'';document.getElementById('personPhone').value=d.phone||'';document.getElementById('personNote').value=d.note||''}m.dataset.seatId=seatId||''}
+function openAddPersonModal(seatId){clearHighlight();var m=document.getElementById('addPersonModal');m.classList.add('active');document.getElementById('personName').value='';document.getElementById('personSeat').value=seatId?seatId.replace('-','排-')+'号':'';document.getElementById('personUnit').value='';document.getElementById('personPosition').value='';document.getElementById('personPhone').value='';document.getElementById('personNote').value='';if(seatId&&seatData[seatId]){var d=seatData[seatId];document.getElementById('personName').value=d.name;document.getElementById('personUnit').value=d.unit||'';document.getElementById('personPosition').value=d.position||'';document.getElementById('personPhone').value=d.phone||'';document.getElementById('personNote').value=d.note||''}m.dataset.seatId=seatId||''}
 function closeModal(){document.getElementById('addPersonModal').classList.remove('active')}
 function savePerson(){var m=document.getElementById('addPersonModal');var seatId=m.dataset.seatId;var name=document.getElementById('personName').value.trim();if(!name){if(seatData[seatId]){delete seatData[seatId];saveToStorage();renderSeats();updateStats();closeModal()}return}if(!seatId)return;seatData[seatId]={name:name,unit:document.getElementById('personUnit').value.trim(),position:document.getElementById('personPosition').value.trim(),phone:document.getElementById('personPhone').value.trim(),note:document.getElementById('personNote').value.trim()};saveToStorage();renderSeats();updateStats();closeModal()}
 function onDragStart(e,seatId){if(!seatData[seatId]){e.preventDefault();return}dragSource=seatId;e.target.classList.add('dragging');e.dataTransfer.effectAllowed='move'}
@@ -135,7 +149,7 @@ function onDragEnd(e){e.target.classList.remove('dragging');dragSource=null}
 function showTooltip(e,seatId){var t=document.getElementById('tooltip');var d=seatData[seatId];if(!d){t.style.display='none';return}t.querySelector('.name').textContent=d.name;var info='座位：'+seatId.replace('-','排-')+'号\n';if(d.unit)info+='单位：'+d.unit+'\n';if(d.position)info+='职务：'+d.position+'\n';if(d.phone)info+='电话：'+d.phone+'\n';if(d.note)info+='备注：'+d.note;t.querySelector('.info').textContent=info;t.style.display='block';t.style.left=(e.clientX+15)+'px';t.style.top=(e.clientY+15)+'px'}
 function hideTooltip(){document.getElementById('tooltip').style.display='none'}
 function updateStats(){var o=Object.keys(seatData).length;var t=getTotalSeats();document.getElementById('totalSeats').textContent=t;document.getElementById('occupiedSeats').textContent=o;document.getElementById('availableSeats').textContent=t-o}
-function saveToStorage(){localStorage.setItem('seatingData',JSON.stringify(seatData))}
+document.getElementById('searchInput').addEventListener('keypress',function(e){if(e.key==='Enter')searchSeats()});document.getElementById('searchInput').addEventListener('input',function(){if(!this.value)clearHighlight()});function saveToStorage(){localStorage.setItem('seatingData',JSON.stringify(seatData))}
 function loadFromStorage(){var d=localStorage.getItem('seatingData');if(d)seatData=JSON.parse(d)}
 function clearAllSeats(){if(confirm('确定要清空所有座位吗？')){seatData={};saveToStorage();renderSeats();updateStats()}}
 function exportToExcel(){var data=[['排号','座位号','姓名','单位','职务','联系电话','备注']];for(var row=1;row<=ROWS;row++){var seatsInRow=getSeatsInRow(row);for(var seat=1;seat<=seatsInRow;seat++){var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);var p=seatData[seatId];data.push([(row<10?'0'+row:row)+'排',seat+'号',p?p.name:'',p?p.unit:'',p?p.position:'',p?p.phone:'',p?p.note:''])}}var ws=XLSX.utils.aoa_to_sheet(data);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'座次表');XLSX.writeFile(wb,'电视台演播大厅座次表.xlsx')}
