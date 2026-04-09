@@ -114,7 +114,7 @@ function createSeatElement(row,seat){var seatDiv=document.createElement('div');s
 var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);seatDiv.dataset.seatId=seatId;seatDiv.dataset.row=row;seatDiv.dataset.seat=seat;
 if(seatData[seatId]){seatDiv.classList.add('occupied');seatDiv.textContent=seatData[seatId].name.substring(0,3)}
 else{seatDiv.classList.add('available');seatDiv.textContent=seat}
-seatDiv.addEventListener('click',function(){openAddPersonModal(seatId)});
+seatDiv.addEventListener('dblclick',function(){openAddPersonModal(seatId)});
 seatDiv.addEventListener('mouseenter',function(e){showTooltip(e,seatId)});
 seatDiv.addEventListener('mouseleave',hideTooltip);
 seatDiv.draggable=true;
