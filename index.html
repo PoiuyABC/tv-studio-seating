@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电视台演播大厅座次排序系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei',Arial,sans-serif;background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);min-height:100vh;color:#fff}
+.container{max-width:100%;padding:10px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;background:rgba(255,255,255,0.1);border-radius:10px;margin-bottom:10px}
+.header h1{font-size:clamp(16px,2.5vw,22px);color:#ffd700;text-shadow:2px 2px 4px rgba(0,0,0,0.5)}
+.toolbar{display:flex;gap:8px}
+.toolbar button{padding:6px 14px;border:none;border-radius:5px;cursor:pointer;font-size:13px;transition:all 0.3s;font-weight:bold}
+.btn-success{background:linear-gradient(45deg,#11998e,#38ef7d);color:#fff}
+.btn-info{background:linear-gradient(45deg,#667eea,#764ba2);color:#fff}
+.btn-warning{background:linear-gradient(45deg,#f093fb,#f5576c);color:#fff}
+.toolbar button:hover{transform:translateY(-2px);box-shadow:0 5px 15px rgba(0,0,0,0.3)}
+.seating-area{background:rgba(255,255,255,0.05);border-radius:10px;padding:15px;overflow-x:auto}
+.stage{text-align:center;padding:12px;margin-bottom:12px;background:linear-gradient(90deg,#8B0000,#DC143C,#8B0000);border-radius:10px;font-size:clamp(14px,2vw,20px);font-weight:bold;color:#ffd700;box-shadow:0 5px 20px rgba(139,0,0,0.5)}
+.direction{display:flex;justify-content:space-between;padding:5px 40px;font-size:13px;color:#aaa}
+.seats-grid{display:flex;flex-direction:column;gap:3px;align-items:center}
+.row{display:flex;align-items:center;gap:2px;width:100%;justify-content:center}
+.row-label{width:40px;min-width:40px;text-align:center;font-size:11px;color:#ffd700;font-weight:bold}
+.seat{width:clamp(28px,3.5vw,44px);height:clamp(28px,3.5vw,44px);display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;font-size:clamp(9px,1.3vw,12px);transition:all 0.2s;border:1px solid rgba(255,255,255,0.1)}
+.seat.aisle{width:30px;min-width:30px;background:rgba(255,255,255,0.05);border:none;cursor:default}
+.seat.available{background:linear-gradient(135deg,#2c3e50,#34495e);color:#95a5a6}
+.seat.occupied{background:linear-gradient(135deg,#27ae60,#2ecc71);color:#fff;font-weight:bold}
+.seat:hover:not(.aisle){transform:scale(1.12);box-shadow:0 0 15px rgba(255,215,0,0.4);z-index:10}
+.seat.dragging{opacity:0.5;transform:scale(1.15)}
+.seat.drag-over{border:2px dashed #ffd700;background:rgba(255,215,0,0.3)}
+.tooltip{position:fixed;background:rgba(0,0,0,0.9);color:#fff;padding:10px 12px;border-radius:6px;font-size:12px;z-index:1000;pointer-events:none;max-width:260px;box-shadow:0 5px 20px rgba(0,0,0,0.5);border:1px solid #ffd700;display:none;white-space:pre-line}
+.tooltip .name{font-size:14px;font-weight:bold;color:#ffd700;margin-bottom:4px}
+.stats{display:flex;justify-content:center;gap:30px;padding:10px;background:rgba(255,255,255,0.05);border-radius:8px;margin-top:10px}
+.stat-item{text-align:center}
+.stat-value{font-size:22px;font-weight:bold;color:#ffd700}
+.stat-label{font-size:11px;color:#aaa}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
+.modal.active{display:flex}
+.modal-content{background:#1a1a2e;padding:20px;border-radius:12px;max-width:360px;width:90%;border:2px solid #ffd700}
+.modal-title{font-size:16px;color:#ffd700;margin-bottom:15px;text-align:center}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;margin-bottom:4px;color:#aaa;font-size:13px}
+.form-group input,.form-group textarea{width:100%;padding:8px;border:1px solid #333;border-radius:4px;background:#0f0f1a;color:#fff;font-size:13px}
+.modal-buttons{display:flex;gap:8px;margin-top:15px}
+.modal-buttons button{flex:1;padding:8px;border:none;border-radius:4px;cursor:pointer;font-weight:bold;font-size:13px}
+@media (max-width:768px){.header{padding:10px}.toolbar button{padding:5px 10px;font-size:11px}.seat{width:22px;height:22px;font-size:8px}.row-label{width:32px;font-size:9px}.aisle{width:20px}}
+#fileInput{display:none}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="header">
+<h1>电视台演播大厅座次排序系统</h1>
+<div class="toolbar">
+<button class="btn-success" onclick="exportToExcel()">导出Excel</button>
+<button class="btn-info" onclick="document.getElementById('fileInput').click()">导入Excel</button>
+<button class="btn-warning" onclick="clearAllSeats()">清空座位</button>
+</div>
+</div>
+<input type="file" id="fileInput" accept=".xlsx,.xls" onchange="importFromExcel(event)">
+<div class="seating-area">
+<div class="stage">主席台</div>
+<div class="direction"><span>北</span><span>前门</span></div>
+<div class="seats-grid" id="SeatsGrid"></div>
+</div>
+<div class="stats">
+<div class="stat-item"><div class="stat-value" id="totalSeats">563</div><div class="stat-label">总座位数</div></div>
+<div class="stat-item"><div class="stat-value" id="occupiedSeats">0</div><div class="stat-label">已分配</div></div>
+<div class="stat-item"><div class="stat-value" id="availableSeats">563</div><div class="stat-label">空座位</div></div>
+</div>
+</div>
+<div class="tooltip" id="tooltip"><div class="name"></div><div class="info"></div></div>
+<div class="modal" id="addPersonModal">
+<div class="modal-content">
+<div class="modal-title">编辑人员信息</div>
+<div class="form-group"><label>姓名</label><input type="text" id="personName" placeholder="请输入姓名"></div>
+<div class="form-group"><label>座位号</label><input type="text" id="personSeat" readonly></div>
+<div class="form-group"><label>单位</label><input type="text" id="personUnit" placeholder="请输入单位"></div>
+<div class="form-group"><label>职务</label><input type="text" id="personPosition" placeholder="请输入职务"></div>
+<div class="form-group"><label>联系电话</label><input type="text" id="personPhone" placeholder="请输入联系电话"></div>
+<div class="form-group"><label>备注</label><textarea id="personNote" rows="2" placeholder="其他备注信息"></textarea></div>
+<div class="modal-buttons">
+<button class="btn-success" onclick="savePerson()">保存</button>
+<button class="btn-warning" onclick="closeModal()">取消</button>
+</div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+var ROWS=15,SEATS_SIDE=9,SEATS_MIDDLE_ODD=20,SEATS_MIDDLE_EVEN=19,seatData={},dragSource=null;
+function getSeatsInRow(row){return row%2===1?SEATS_SIDE*2+SEATS_MIDDLE_ODD:SEATS_SIDE*2+SEATS_MIDDLE_EVEN}
+function getTotalSeats(){var t=0;for(var r=1;r<=ROWS;r++)t+=getSeatsInRow(r);return t}
+function init(){loadFromStorage();renderSeats();updateStats()}
+function renderSeats(){var g=document.getElementById('SeatsGrid');g.innerHTML='';
+for(var row=1;row<=ROWS;row++){var rowDiv=document.createElement('div');rowDiv.className='row';
+var leftLabel=document.createElement('div');leftLabel.className='row-label';leftLabel.textContent=(row<10?'0'+row:row)+'排';rowDiv.appendChild(leftLabel);
+// 左侧单数：37,35,33,31,29,27,25,23,21 (从大到小)
+for(var i=0;i<SEATS_SIDE;i++){var seat=37-i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var aisle1=document.createElement('div');aisle1.className='seat aisle';rowDiv.appendChild(aisle1);
+// 中间区域：先单数19-1，再双数2-20/18
+var middleOdds=row%2===1?10:10; // 19,17,15,13,11,9,7,5,3,1
+var middleEvens=row%2===1?10:9; // 2,4,6,8,10,12,14,16,18,20 或 2,4,6,8,10,12,14,16,18
+for(var i=0;i<middleOdds;i++){var seat=19-i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+for(var i=0;i<middleEvens;i++){var seat=2+i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var aisle2=document.createElement('div');aisle2.className='seat aisle';rowDiv.appendChild(aisle2);
+// 右侧双数：22-38 或 20-36
+var rightStart=row%2===1?22:20;
+var rightCount=SEATS_SIDE;
+for(var i=0;i<rightCount;i++){var seat=rightStart+i*2;rowDiv.appendChild(createSeatElement(row,seat))}
+var rightLabel=document.createElement('div');rightLabel.className='row-label';rightLabel.textContent=(row<10?'0'+row:row)+'排';rowDiv.appendChild(rightLabel);
+g.appendChild(rowDiv)}}
+function createSeatElement(row,seat){var seatDiv=document.createElement('div');seatDiv.className='seat';
+var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);seatDiv.dataset.seatId=seatId;seatDiv.dataset.row=row;seatDiv.dataset.seat=seat;
+if(seatData[seatId]){seatDiv.classList.add('occupied');seatDiv.textContent=seatData[seatId].name.substring(0,3)}
+else{seatDiv.classList.add('available');seatDiv.textContent=seat}
+seatDiv.addEventListener('click',function(){openAddPersonModal(seatId)});
+seatDiv.addEventListener('mouseenter',function(e){showTooltip(e,seatId)});
+seatDiv.addEventListener('mouseleave',hideTooltip);
+seatDiv.draggable=true;
+seatDiv.addEventListener('dragstart',function(e){onDragStart(e,seatId)});
+seatDiv.addEventListener('dragover',function(e){onDragOver(e)});
+seatDiv.addEventListener('dragleave',function(e){onDragLeave(e)});
+seatDiv.addEventListener('drop',function(e){onDrop(e,seatId)});
+seatDiv.addEventListener('dragend',function(e){onDragEnd(e)});
+return seatDiv}
+function openAddPersonModal(seatId){var m=document.getElementById('addPersonModal');m.classList.add('active');document.getElementById('personName').value='';document.getElementById('personSeat').value=seatId?seatId.replace('-','排-')+'号':'';document.getElementById('personUnit').value='';document.getElementById('personPosition').value='';document.getElementById('personPhone').value='';document.getElementById('personNote').value='';if(seatId&&seatData[seatId]){var d=seatData[seatId];document.getElementById('personName').value=d.name;document.getElementById('personUnit').value=d.unit||'';document.getElementById('personPosition').value=d.position||'';document.getElementById('personPhone').value=d.phone||'';document.getElementById('personNote').value=d.note||''}m.dataset.seatId=seatId||''}
+function closeModal(){document.getElementById('addPersonModal').classList.remove('active')}
+function savePerson(){var m=document.getElementById('addPersonModal');var seatId=m.dataset.seatId;var name=document.getElementById('personName').value.trim();if(!name){if(seatData[seatId]){delete seatData[seatId];saveToStorage();renderSeats();updateStats();closeModal()}return}if(!seatId)return;seatData[seatId]={name:name,unit:document.getElementById('personUnit').value.trim(),position:document.getElementById('personPosition').value.trim(),phone:document.getElementById('personPhone').value.trim(),note:document.getElementById('personNote').value.trim()};saveToStorage();renderSeats();updateStats();closeModal()}
+function onDragStart(e,seatId){if(!seatData[seatId]){e.preventDefault();return}dragSource=seatId;e.target.classList.add('dragging');e.dataTransfer.effectAllowed='move'}
+function onDragOver(e){e.preventDefault();e.target.classList.add('drag-over')}
+function onDragLeave(e){e.target.classList.remove('drag-over')}
+function onDrop(e,targetId){e.preventDefault();e.target.classList.remove('drag-over');if(dragSource&&dragSource!==targetId){var sourceData=seatData[dragSource];var targetData=seatData[targetId];seatData[targetId]=sourceData;if(targetData)seatData[dragSource]=targetData;else delete seatData[dragSource];saveToStorage();renderSeats()}}
+function onDragEnd(e){e.target.classList.remove('dragging');dragSource=null}
+function showTooltip(e,seatId){var t=document.getElementById('tooltip');var d=seatData[seatId];if(!d){t.style.display='none';return}t.querySelector('.name').textContent=d.name;var info='座位：'+seatId.replace('-','排-')+'号\n';if(d.unit)info+='单位：'+d.unit+'\n';if(d.position)info+='职务：'+d.position+'\n';if(d.phone)info+='电话：'+d.phone+'\n';if(d.note)info+='备注：'+d.note;t.querySelector('.info').textContent=info;t.style.display='block';t.style.left=(e.clientX+15)+'px';t.style.top=(e.clientY+15)+'px'}
+function hideTooltip(){document.getElementById('tooltip').style.display='none'}
+function updateStats(){var o=Object.keys(seatData).length;var t=getTotalSeats();document.getElementById('totalSeats').textContent=t;document.getElementById('occupiedSeats').textContent=o;document.getElementById('availableSeats').textContent=t-o}
+function saveToStorage(){localStorage.setItem('seatingData',JSON.stringify(seatData))}
+function loadFromStorage(){var d=localStorage.getItem('seatingData');if(d)seatData=JSON.parse(d)}
+function clearAllSeats(){if(confirm('确定要清空所有座位吗？')){seatData={};saveToStorage();renderSeats();updateStats()}}
+function exportToExcel(){var data=[['排号','座位号','姓名','单位','职务','联系电话','备注']];for(var row=1;row<=ROWS;row++){var seatsInRow=getSeatsInRow(row);for(var seat=1;seat<=seatsInRow;seat++){var seatId=(row<10?'0'+row:row)+'-'+(seat<10?'0'+seat:seat);var p=seatData[seatId];data.push([(row<10?'0'+row:row)+'排',seat+'号',p?p.name:'',p?p.unit:'',p?p.position:'',p?p.phone:'',p?p.note:''])}}var ws=XLSX.utils.aoa_to_sheet(data);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'座次表');XLSX.writeFile(wb,'电视台演播大厅座次表.xlsx')}
+function importFromExcel(e){var file=e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(e){var data=new Uint8Array(e.target.result);var workbook=XLSX.read(data,{type:'array'});var sheet=workbook.Sheets[workbook.SheetNames[0]];var json=XLSX.utils.sheet_to_json(sheet,{header:1});seatData={};for(var i=1;i<json.length;i++){var row=json[i];if(row[2]){var rowNum=String(parseInt(row[0])).padStart(2,'0');var seatNum=String(parseInt(row[1])).padStart(2,'0');var seatId=rowNum+'-'+seatNum;seatData[seatId]={name:row[2]||'',unit:row[3]||'',position:row[4]||'',phone:row[5]||'',note:row[6]||''}}}saveToStorage();renderSeats();updateStats();alert('导入成功！共导入 '+Object.keys(seatData).length+' 条数据')};reader.readAsArrayBuffer(file);e.target.value=''}
+init();
+</script>
+</body>
+</html>
